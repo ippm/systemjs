@@ -1330,9 +1330,32 @@ function warn(msg) {
   }
   else if (typeof require != 'undefined' && typeof process != 'undefined') {
     var fs;
+    var http;
+    var https;
     fetchTextFromURL = function(url, authorization, fulfill, reject) {
-      if (url.substr(0, 8) != 'file:///')
-        throw new Error('Unable to fetch "' + url + '". Only file URLs of the form file:/// allowed running in Node.');
+      if (url.substr(0, 7) == 'http://' || url.substr(0, 8) == 'https://') {
+        http = http || require('http');
+        https = https || require('https');
+        var buf = '';
+        var req = (url.substr(0, 8) == 'https://' ? https : http).request(url, function(res) {
+          if (res.statusCode !== 200) {
+            reject(new Error('Unable to fetch "' + url + '". http status code: ' + res.statusCode));
+          }
+          res.setEncoding('utf8');
+          res.on('data', function(chunk) {
+            buf += chunk;
+          });
+          res.on('end', function() {
+            fulfill(buf);
+          });
+        });
+        req.on('error', reject);
+        req.end();
+        return;
+      } else if (url.substr(0, 8) != 'file:///') {
+        throw new Error('Unable to fetch "' + url + '". Only file URLs of the form file:/// or http[s]:// allowed running in Node.');
+      }
+
       fs = fs || require('fs');
       if (isWindows)
         url = url.replace(/\//g, '\\').substr(8);
